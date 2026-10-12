@@ -423,5 +423,11 @@ for whatsmeow).
 - On-device validation against official clients (2026-09/10): capability
   gating / `caller_pn` fingerprinting, CSD-per-IDR, orientation masking,
   relay port 3480 requirement, video tiers.
+- [whatspec](https://github.com/oxidezap/whatspec) — the ecosystem's
+  language-neutral protocol IR (extracted from the WA Web bundle; supplies
+  the `waproto` definitions). **whatspec covers iq/proto/appstate/enums/
+  tokens/notif/wam — it has no voip domain.** This spec documents that
+  missing surface; its vectors aim to follow whatspec's packaging
+  conventions (versioned JSON + schema + manifest with provenance).
 - Sibling work: [open-madrid](https://github.com/fenleon/open-madrid) (the
   iMessage equivalent) — same methodology: public spec + vectors, MIT.
