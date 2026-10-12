@@ -64,9 +64,9 @@ func VerifyKats(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("wahkdf: %w", err)
 	}
-	check("wahkdf.okm46", wahkdf, mustHex(k.Wahkdf["okm46"]))
-	check("wahkdf.masterKey", wahkdf[:16], mustHex(k.Wahkdf["masterKey"]))
-	check("wahkdf.masterSalt", wahkdf[16:30], mustHex(k.Wahkdf["masterSalt"]))
+	check("wahkdf.okm46", wahkdf, k.Wahkdf["okm46"])
+	check("wahkdf.masterKey", wahkdf[:16], k.Wahkdf["masterKey"])
+	check("wahkdf.masterSalt", wahkdf[16:30], k.Wahkdf["masterSalt"])
 
 	// e2e_srtp: derive with both LIDs; session keys, RTP IV, payload cipher, WARP tag.
 	peer, err := DeriveE2ESrtpKeys(callKey, k.Inputs.PeerLID)
@@ -77,15 +77,15 @@ func VerifyKats(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("e2e derive self: %w", err)
 	}
-	check("e2e_srtp.peer_cipherKey", peer.CipherKey[:], mustHex(k.E2ESrtp["peer_cipherKey"]))
-	check("e2e_srtp.peer_salt", peer.Salt[:], mustHex(k.E2ESrtp["peer_salt"]))
-	check("e2e_srtp.peer_authKey", peer.AuthKey[:], mustHex(k.E2ESrtp["peer_authKey"]))
-	check("e2e_srtp.self_cipherKey", self.CipherKey[:], mustHex(k.E2ESrtp["self_cipherKey"]))
-	check("e2e_srtp.self_salt", self.Salt[:], mustHex(k.E2ESrtp["self_salt"]))
-	check("e2e_srtp.self_authKey", self.AuthKey[:], mustHex(k.E2ESrtp["self_authKey"]))
+	check("e2e_srtp.peer_cipherKey", peer.CipherKey[:], k.E2ESrtp["peer_cipherKey"])
+	check("e2e_srtp.peer_salt", peer.Salt[:], k.E2ESrtp["peer_salt"])
+	check("e2e_srtp.peer_authKey", peer.AuthKey[:], k.E2ESrtp["peer_authKey"])
+	check("e2e_srtp.self_cipherKey", self.CipherKey[:], k.E2ESrtp["self_cipherKey"])
+	check("e2e_srtp.self_salt", self.Salt[:], k.E2ESrtp["self_salt"])
+	check("e2e_srtp.self_authKey", self.AuthKey[:], k.E2ESrtp["self_authKey"])
 
 	iv := BuildE2ERtpIV(peer.Salt[:], k.Inputs.SSRC, k.Inputs.Roc, k.Inputs.Seq)
-	check("e2e_srtp.rtpIv", iv[:], mustHex(k.E2ESrtp["rtpIv"]))
+	check("e2e_srtp.rtpIv", iv[:], k.E2ESrtp["rtpIv"])
 
 	payload, err := hex.DecodeString(k.Inputs.Payload)
 	if err != nil {
@@ -95,7 +95,7 @@ func VerifyKats(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("e2e crypt: %w", err)
 	}
-	check("e2e_srtp.cipher_out", ct, mustHex(k.E2ESrtp["cipher_out"]))
+	check("e2e_srtp.cipher_out", ct, k.E2ESrtp["cipher_out"])
 	pt, err := CryptE2EPayload(peer, k.Inputs.SSRC, k.Inputs.Seq, k.Inputs.Roc, ct)
 	if err != nil {
 		return fmt.Errorf("e2e crypt round-trip: %w", err)
@@ -109,7 +109,7 @@ func VerifyKats(data []byte) error {
 		return fmt.Errorf("samplePacket: %w", err)
 	}
 	tag := ComputeWarpMITag(peer.AuthKey[:], samplePacket, k.Inputs.Roc, WarpMITagLen)
-	check("e2e_srtp.warp_mi_tag4", tag, mustHex(k.E2ESrtp["warp_mi_tag4"]))
+	check("e2e_srtp.warp_mi_tag4", tag, k.E2ESrtp["warp_mi_tag4"])
 
 	// sframe: participant id, label, key, counter IV, header, encrypt.
 	peerID := FormatParticipantID(k.Inputs.PeerLID)
@@ -119,14 +119,14 @@ func VerifyKats(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("sframe key: %w", err)
 	}
-	check("sframe.peerKey32", peerKey, mustHex(k.SFrame["peerKey32"]))
+	check("sframe.peerKey32", peerKey, k.SFrame["peerKey32"])
 	selfKey, err := DeriveE2ESframeKey(callKey, FormatParticipantID(k.Inputs.SelfLID))
 	if err != nil {
 		return fmt.Errorf("sframe self key: %w", err)
 	}
-	check("sframe.selfKey32", selfKey, mustHex(k.SFrame["selfKey32"]))
-	check("sframe.counterToIv_5", counterToIVBytes(5), mustHex(k.SFrame["counterToIv_5"]))
-	check("sframe.header_5_0", BuildSframeHeader(5, 0), mustHex(k.SFrame["header_5_0"]))
+	check("sframe.selfKey32", selfKey, k.SFrame["selfKey32"])
+	check("sframe.counterToIv_5", counterToIVBytes(5), k.SFrame["counterToIv_5"])
+	check("sframe.header_5_0", BuildSframeHeader(5, 0), k.SFrame["header_5_0"])
 
 	session, err := NewSframeSession(callKey, k.Inputs.SelfLID, k.Inputs.PeerLID)
 	if err != nil {
@@ -137,7 +137,7 @@ func VerifyKats(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("sframe encrypt: %w", err)
 	}
-	check("sframe.encrypt_out", frame, mustHex(k.SFrame["encrypt_out"]))
+	check("sframe.encrypt_out", frame, k.SFrame["encrypt_out"])
 
 	// hbh_srtp: two-stage HKDF derivations, keying split, both session expansions,
 	// RTP ICM nonce + cipher, and the full SRTCP-protected sender report.
@@ -149,59 +149,59 @@ func VerifyKats(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("hbh uplink salt: %w", err)
 	}
-	check("hbh_srtp.uplinkSalt32", uplinkSalt, mustHex(k.HbhSrtp["uplinkSalt32"]))
+	check("hbh_srtp.uplinkSalt32", uplinkSalt, k.HbhSrtp["uplinkSalt32"])
 	uplinkKey, err := deriveHbhKeyWithLabels(hbh, LabelUplinkSrtcpSalt, LabelUplinkSrtcpKey)
 	if err != nil {
 		return fmt.Errorf("hbh uplink key: %w", err)
 	}
-	check("hbh_srtp.uplinkKey30", uplinkKey, mustHex(k.HbhSrtp["uplinkKey30"]))
+	check("hbh_srtp.uplinkKey30", uplinkKey, k.HbhSrtp["uplinkKey30"])
 	sharedSrtp, err := deriveHbhKeyWithLabels(hbh, LabelSharedSrtpSalt, LabelSharedSrtpKey)
 	if err != nil {
 		return fmt.Errorf("hbh shared srtp: %w", err)
 	}
-	check("hbh_srtp.sharedSrtpKey30", sharedSrtp, mustHex(k.HbhSrtp["sharedSrtpKey30"]))
+	check("hbh_srtp.sharedSrtpKey30", sharedSrtp, k.HbhSrtp["sharedSrtpKey30"])
 	sharedSrtcp, err := deriveHbhKeyWithLabels(hbh, LabelSharedSrtcpSalt, LabelSharedSrtcpKey)
 	if err != nil {
 		return fmt.Errorf("hbh shared srtcp: %w", err)
 	}
-	check("hbh_srtp.sharedSrtcpKey30", sharedSrtcp, mustHex(k.HbhSrtp["sharedSrtcpKey30"]))
+	check("hbh_srtp.sharedSrtcpKey30", sharedSrtcp, k.HbhSrtp["sharedSrtcpKey30"])
 	downlinkKey, err := deriveHbhKeyWithLabels(hbh, LabelDownlinkSrtcpSalt, LabelDownlinkSrtcpKey)
 	if err != nil {
 		return fmt.Errorf("hbh downlink: %w", err)
 	}
-	check("hbh_srtp.downlinkKey30", downlinkKey, mustHex(k.HbhSrtp["downlinkKey30"]))
+	check("hbh_srtp.downlinkKey30", downlinkKey, k.HbhSrtp["downlinkKey30"])
 
 	keying, err := DeriveHbhSrtcpKeyingUplink(hbh)
 	if err != nil {
 		return fmt.Errorf("hbh keying: %w", err)
 	}
-	check("hbh_srtp.masterKey", keying.MasterKey[:], mustHex(k.HbhSrtp["masterKey"]))
-	check("hbh_srtp.masterSalt", keying.MasterSalt[:], mustHex(k.HbhSrtp["masterSalt"]))
+	check("hbh_srtp.masterKey", keying.MasterKey[:], k.HbhSrtp["masterKey"])
+	check("hbh_srtp.masterSalt", keying.MasterSalt[:], k.HbhSrtp["masterSalt"])
 
 	rtpSession, err := ExpandLibsrtpSessionKeys(keying)
 	if err != nil {
 		return fmt.Errorf("hbh srtp expand: %w", err)
 	}
-	check("hbh_srtp.sessionKey", rtpSession.SessionKey[:], mustHex(k.HbhSrtp["sessionKey"]))
-	check("hbh_srtp.sessionSalt", rtpSession.SessionSalt[:], mustHex(k.HbhSrtp["sessionSalt"]))
-	check("hbh_srtp.authKey", rtpSession.AuthKey[:], mustHex(k.HbhSrtp["authKey"]))
+	check("hbh_srtp.sessionKey", rtpSession.SessionKey[:], k.HbhSrtp["sessionKey"])
+	check("hbh_srtp.sessionSalt", rtpSession.SessionSalt[:], k.HbhSrtp["sessionSalt"])
+	check("hbh_srtp.authKey", rtpSession.AuthKey[:], k.HbhSrtp["authKey"])
 
 	srtcpSession, err := ExpandLibsrtcpSessionKeys(keying)
 	if err != nil {
 		return fmt.Errorf("hbh srtcp expand: %w", err)
 	}
-	check("hbh_srtp.srtcpSessionKey", srtcpSession.SessionKey[:], mustHex(k.HbhSrtp["srtcpSessionKey"]))
-	check("hbh_srtp.srtcpSessionSalt", srtcpSession.SessionSalt[:], mustHex(k.HbhSrtp["srtcpSessionSalt"]))
-	check("hbh_srtp.srtcpAuthKey", srtcpSession.AuthKey[:], mustHex(k.HbhSrtp["srtcpAuthKey"]))
+	check("hbh_srtp.srtcpSessionKey", srtcpSession.SessionKey[:], k.HbhSrtp["srtcpSessionKey"])
+	check("hbh_srtp.srtcpSessionSalt", srtcpSession.SessionSalt[:], k.HbhSrtp["srtcpSessionSalt"])
+	check("hbh_srtp.srtcpAuthKey", srtcpSession.AuthKey[:], k.HbhSrtp["srtcpAuthKey"])
 
 	packetIndex := uint64(k.Inputs.Roc)<<16 | uint64(k.Inputs.Seq)
 	nonce := BuildRtpICMNonce(k.Inputs.SSRC, packetIndex)
-	check("hbh_srtp.rtpIcmNonce", nonce[:], mustHex(k.HbhSrtp["rtpIcmNonce"]))
+	check("hbh_srtp.rtpIcmNonce", nonce[:], k.HbhSrtp["rtpIcmNonce"])
 	hbhCT, err := CryptHbhRtpPayload(rtpSession, k.Inputs.SSRC, packetIndex, payload)
 	if err != nil {
 		return fmt.Errorf("hbh crypt: %w", err)
 	}
-	check("hbh_srtp.cipher_out", hbhCT, mustHex(k.HbhSrtp["cipher_out"]))
+	check("hbh_srtp.cipher_out", hbhCT, k.HbhSrtp["cipher_out"])
 
 	// ssrc: HKDF(salt=slot_word LE32, ikm=callId, info=lid, 4) as LE u32.
 	slot0, err := DeriveWasmParticipantSSRC(k.Inputs.CallID, k.Inputs.PeerLID, 0)
@@ -246,5 +246,3 @@ func hexEqual(got []byte, wantHex string) bool {
 	want, err := hex.DecodeString(wantHex)
 	return err == nil && string(got) == string(want)
 }
-
-func mustHex(s string) string { return s }
