@@ -10,7 +10,6 @@ package mlow
 
 import (
 	"math"
-	"sync"
 )
 
 const (
@@ -451,23 +450,12 @@ func cloneU16(v []uint16) []uint16 {
 	return out
 }
 
-var (
-	lsfBuiltOnce sync.Once
-	lsfBuiltVal  *LsfBuilt
-	lsfBuiltErr  error
-)
-
-// LsfBuilt loads the LSF seed ROM and builds all three runtime structs once.
-// The blob bytes come from vectors/mlow/lsf_seed.bin (the reference embeds
-// the same file).
+// LoadLsfBuilt builds all three LSF runtime structs from a seed blob
+// (vectors/mlow/lsf_seed.bin; the reference embeds the same file).
 func LoadLsfBuilt(blob []byte) (*LsfBuilt, error) {
-	lsfBuiltOnce.Do(func() {
-		seed, err := LoadLsfSeed(blob)
-		if err != nil {
-			lsfBuiltErr = err
-			return
-		}
-		lsfBuiltVal = BuildLsfTables(seed)
-	})
-	return lsfBuiltVal, lsfBuiltErr
+	seed, err := LoadLsfSeed(blob)
+	if err != nil {
+		return nil, err
+	}
+	return BuildLsfTables(seed), nil
 }
