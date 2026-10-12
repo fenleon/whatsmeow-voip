@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"strings"
 )
 
@@ -23,6 +24,47 @@ type KATInputs struct {
 	SamplePacket  string `json:"samplePacket"`
 }
 
+type katRtp struct {
+	SpeechHeader16               string `json:"speechHeader16"`
+	DtxHeader20                  string `json:"dtxHeader20"`
+	AndroidVideoHeader28         string `json:"androidVideoHeader28"`
+	AndroidVideoExtension12      string `json:"androidVideoExtension12"`
+	AndroidVideoDeltaHeader28    string `json:"androidVideoDeltaHeader28"`
+	AndroidVideoDeltaExtension12 string `json:"androidVideoDeltaExtension12"`
+	EstimateSpeech12             uint64 `json:"estimateSpeech12"`
+	EstimateDtx1                 uint64 `json:"estimateDtx1"`
+	EstimatePriming2             uint64 `json:"estimatePriming2"`
+}
+
+type katRtcpStats struct {
+	PacketsSent  uint64 `json:"packetsSent"`
+	OctetsSent   uint64 `json:"octetsSent"`
+	RTPTimestamp uint64 `json:"rtpTimestamp"`
+}
+
+type katRtcp struct {
+	NowMs        uint64       `json:"nowMs"`
+	RemoteSsrc   uint64       `json:"remoteSsrc"`
+	Stats        katRtcpStats `json:"stats"`
+	Compact208   string       `json:"compact208"`
+	Compact209   string       `json:"compact209"`
+	SenderReport string       `json:"senderReport"`
+}
+
+type katStun struct {
+	Tx              string `json:"tx"`
+	RelayToken      string `json:"relayToken"`
+	MiKey           string `json:"miKey"`
+	Crc32Abc        uint64 `json:"crc32_abc"`
+	AttrToken       string `json:"attr_token"`
+	XorEndpoint     string `json:"xorEndpoint"`
+	NativeSenderSub string `json:"nativeSenderSub"`
+	MinimalMi       string `json:"minimalMi"`
+	WithFp          string `json:"withFp"`
+	WasmAllocate    string `json:"wasmAllocate"`
+	Ping            string `json:"ping"`
+}
+
 type katFile struct {
 	Inputs     KATInputs         `json:"inputs"`
 	SFrame     map[string]string `json:"sframe"`
@@ -30,13 +72,15 @@ type katFile struct {
 	Wahkdf     map[string]string `json:"wahkdf"`
 	HbhSrtp    map[string]string `json:"hbh_srtp"`
 	VoipCrypto map[string]uint64 `json:"voip_crypto"`
-	// rtp/rtcp/stun sections pin the framing builders; they are verified by
-	// the packetizer work, not by this crypto-only verifier.
+	Rtp        katRtp            `json:"rtp"`
+	Rtcp       katRtcp           `json:"rtcp"`
+	Stun       katStun           `json:"stun"`
+	StunProto  map[string]string `json:"stun_proto"`
 }
 
-// VerifyKats checks the crypto sections of vectors/voip/kats.json against this
-// implementation and returns every failure (nil = all pass). The rtp/rtcp/stun
-// sections are framing (packetizer) scope and intentionally skipped here.
+// VerifyKats checks all sections of vectors/voip/kats.json — the media-crypto
+// stack and the RTP/RTCP/STUN framing builders — against this implementation
+// and returns every failure (nil = all pass).
 func VerifyKats(data []byte) error {
 	var k katFile
 	if err := json.Unmarshal(data, &k); err != nil {
@@ -219,9 +263,132 @@ func VerifyKats(data []byte) error {
 		failures = append(failures, fmt.Sprintf("voip_crypto.ssrc_slot1: got %d want %d", slot1, k.VoipCrypto["ssrc_slot1"]))
 	}
 
-	// The SRTCP-protected SR vector (srtcpProtectedSrIndex1) is verified by the
-	// framing work — it needs the RTCP sender-report builder to produce its
-	// plaintext input. Every crypto primitive it exercises is covered above.
+	// rtp: WhatsApp speech/DTX/video headers + the SRTP wire-size ladder.
+	tx, err := hex.DecodeString(k.Stun.Tx)
+	if err != nil {
+		return fmt.Errorf("stun.tx: %w", err)
+	}
+	var tx12 [12]byte
+	copy(tx12[:], tx)
+
+	speechHeader := EncodeRTPHeader(RtpHeader{
+		Marker:         true,
+		PayloadType:    RTPPayloadTypeMLOW,
+		SequenceNumber: 1,
+		Timestamp:      0,
+		SSRC:           k.Inputs.SSRC,
+	})
+	check("rtp.speechHeader16", speechHeader, k.Rtp.SpeechHeader16)
+	var dtxWord uint32 = whatsappRTPExtensionDTXWord
+	dtxHeader := EncodeRTPHeader(RtpHeader{
+		PayloadType:    RTPPayloadTypeMLOW,
+		SequenceNumber: 2,
+		Timestamp:      320,
+		SSRC:           k.Inputs.SSRC,
+		ExtensionWord:  &dtxWord,
+	})
+	check("rtp.dtxHeader20", dtxHeader, k.Rtp.DtxHeader20)
+	for _, rec := range []struct {
+		name      string
+		captured  string
+		extension string
+	}{
+		{"androidVideoHeader28", k.Rtp.AndroidVideoHeader28, k.Rtp.AndroidVideoExtension12},
+		{"androidVideoDeltaHeader28", k.Rtp.AndroidVideoDeltaHeader28, k.Rtp.AndroidVideoDeltaExtension12},
+	} {
+		captured, err := hex.DecodeString(rec.captured)
+		if err != nil {
+			return fmt.Errorf("rtp %s: %w", rec.name, err)
+		}
+		header, ok := ParseRTPHeader(captured)
+		if !ok || header.VideoExtension == nil {
+			failures = append(failures, fmt.Sprintf("rtp.%s: parse failed", rec.name))
+			continue
+		}
+		check("rtp."+rec.name, EncodeRTPHeader(header), rec.captured)
+		ext, err := hex.DecodeString(rec.extension)
+		if err != nil {
+			return fmt.Errorf("rtp %s extension: %w", rec.name, err)
+		}
+		_, extensionData, ok := RTPExtensionProfileAndData(captured)
+		if !ok || string(extensionData) != string(ext) {
+			failures = append(failures, fmt.Sprintf("rtp.%s: extension block mismatch", rec.name))
+		}
+	}
+	checkUint64 := func(name string, got uint64, want uint64) {
+		if got != want {
+			failures = append(failures, fmt.Sprintf("%s: got %d want %d", name, got, want))
+		}
+	}
+	checkUint64("rtp.estimateSpeech12", uint64(EstimateSrtpRtpWireBytes(payload)), k.Rtp.EstimateSpeech12)
+	checkUint64("rtp.estimateDtx1", uint64(EstimateSrtpRtpWireBytes([]byte{0x10})), k.Rtp.EstimateDtx1)
+	checkUint64("rtp.estimatePriming2", uint64(EstimateSrtpRtpWireBytes(OpusPrimingFrame2[:])), k.Rtp.EstimatePriming2)
+
+	// rtcp: compact PT 208/209 + sender report with NTP timestamp.
+	compact208 := BuildCompactRTCP208(k.Inputs.SSRC, uint32(k.Rtcp.RemoteSsrc))
+	check("rtcp.compact208", compact208[:], k.Rtcp.Compact208)
+	compact209 := BuildCompactRTCP209(k.Inputs.SSRC)
+	check("rtcp.compact209", compact209[:], k.Rtcp.Compact209)
+	senderReport := BuildSenderReport(k.Inputs.SSRC, RTCPSenderStats{
+		PacketsSent:  uint32(k.Rtcp.Stats.PacketsSent),
+		OctetsSent:   uint32(k.Rtcp.Stats.OctetsSent),
+		RTPTimestamp: uint32(k.Rtcp.Stats.RTPTimestamp),
+	}, k.Rtcp.NowMs)
+	check("rtcp.senderReport", senderReport[:], k.Rtcp.SenderReport)
+
+	// stun: CRC-32, attribute TLV, XOR endpoint, native sender subscription,
+	// MI + FINGERPRINT requests, the pinned WASM allocate, and the ping.
+	relayToken, err := hex.DecodeString(k.Stun.RelayToken)
+	if err != nil {
+		return fmt.Errorf("stun.relayToken: %w", err)
+	}
+	miKey, err := hex.DecodeString(k.Stun.MiKey)
+	if err != nil {
+		return fmt.Errorf("stun.miKey: %w", err)
+	}
+	checkUint64("stun.crc32_abc", uint64(crc32.ChecksumIEEE([]byte("abc"))), k.Stun.Crc32Abc)
+	tokenAttr := stunAttr(stunAttrRelayToken, relayToken)
+	check("stun.attr_token", tokenAttr, k.Stun.AttrToken)
+	endpointXOR, ok := EncodeXorRelayEndpoint("157.240.226.133", 3478)
+	if !ok {
+		return errors.New("stun: xor endpoint encode failed")
+	}
+	check("stun.xorEndpoint", endpointXOR[:], k.Stun.XorEndpoint)
+	nativeSenderSub := CreateNativeSenderSubscription(k.Inputs.SSRC)
+	check("stun.nativeSenderSub", nativeSenderSub[:], k.Stun.NativeSenderSub)
+	check("stun.minimalMi", EncodeStunRequest(MsgAllocateRequest, tx12, tokenAttr, miKey, false), k.Stun.MinimalMi)
+	check("stun.withFp", EncodeStunRequest(MsgAllocateRequest, tx12, tokenAttr, miKey, true), k.Stun.WithFp)
+	// The pinned wasmAllocate carries the captured WASM template descriptor
+	// set (the vector predates per-call SSRC derivation in the reference).
+	check("stun.wasmAllocate",
+		buildWasmStunAllocateRequestWithDescriptors(tx12, relayToken, endpointXOR, miKey, wasmStreamDescriptorsTemplate),
+		k.Stun.WasmAllocate)
+	ping := BuildWhatsAppPing(tx12)
+	check("stun.ping", ping[:], k.Stun.Ping)
+
+	// stun_proto: the protobuf subscription bodies.
+	check("stun_proto.voip_sender_subscriptions", CreateVoipSenderSubscriptions(k.Inputs.SSRC), k.StunProto["voip_sender_subscriptions"])
+	check("stun_proto.apk_sender_subscriptions_nopid", CreateApkSenderSubscriptions(k.Inputs.SSRC, nil), k.StunProto["apk_sender_subscriptions_nopid"])
+	pid7 := uint32(7)
+	check("stun_proto.apk_sender_subscriptions_pid", CreateApkSenderSubscriptions(k.Inputs.SSRC, &pid7), k.StunProto["apk_sender_subscriptions_pid"])
+	check("stun_proto.apk_stream_descriptors", CreateApkStreamDescriptors(k.Inputs.SSRC), k.StunProto["apk_stream_descriptors"])
+
+	// hbh_srtp.srtcpProtectedSrIndex1: SRTCP-protect the pinned sender report
+	// with the uplink SRTCP session keys (libsrtp-pinned vector).
+	srtcpKeys := E2ESrtpKeys{
+		CipherKey: srtcpSession.SessionKey,
+		Salt:      srtcpSession.SessionSalt,
+		AuthKey:   srtcpSession.AuthKey,
+	}
+	plainSR, err := hex.DecodeString(k.Rtcp.SenderReport)
+	if err != nil {
+		return fmt.Errorf("rtcp.senderReport: %w", err)
+	}
+	protected, err := ProtectSRTCP(&srtcpKeys, 0x12345678, 1, plainSR)
+	if err != nil {
+		return fmt.Errorf("hbh srtcp protect: %w", err)
+	}
+	check("hbh_srtp.srtcpProtectedSrIndex1", protected, k.HbhSrtp["srtcpProtectedSrIndex1"])
 
 	if len(failures) > 0 {
 		return errors.New(strings.Join(failures, "\n"))

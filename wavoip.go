@@ -161,7 +161,8 @@ func ProtectSRTCP(keys *E2ESrtpKeys, senderSSRC uint32, index uint32, rtcp []byt
 	out = binary.BigEndian.AppendUint32(out, 0x8000_0000|(index&0x7fff_ffff))
 	mac := hmac.New(sha1.New, keys.AuthKey[:])
 	mac.Write(out)
-	return mac.Sum(out), nil
+	tag := mac.Sum(nil)
+	return append(out, tag[:SrtcpTagLen]...), nil
 }
 
 // HbhKeying is the 16 B master key + 14 B master salt split of a 30-byte crypto key.

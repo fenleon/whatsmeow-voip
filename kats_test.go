@@ -1,6 +1,7 @@
 package wavoip
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -22,7 +23,14 @@ func loadKats(t *testing.T) []byte {
 
 func TestVerifyKats(t *testing.T) {
 	data := loadKats(t)
-	t.Run("media crypto stack matches reference vectors", func(t *testing.T) {
+	t.Run("full vector set matches reference vectors", func(t *testing.T) {
 		require.NoError(t, VerifyKats(data))
 	})
+}
+
+func loadKatFile(t *testing.T, data []byte) *katFile {
+	t.Helper()
+	var k katFile
+	require.NoError(t, json.Unmarshal(data, &k))
+	return &k
 }
