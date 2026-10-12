@@ -32,9 +32,12 @@ and [CodeReviewComments](https://go.dev/wiki/CodeReviewComments).
 ## Errors & logging
 
 - Wrap errors with context: `fmt.Errorf("failed to X: %w", err)`.
-- Libraries (what this repo starts as) **never configure loggers** — accept
-  `*zerolog.Logger` parameters or pull from `context.Context` via
-  `zerolog.Ctx(ctx)`; configuring belongs to the top-level program.
+- zerolog everywhere; services configure it via
+  [zeroconfig](https://github.com/tulir/zeroconfig). Libraries (what this repo
+  starts as) **never configure loggers** — accept `*zerolog.Logger` parameters
+  or pull from `context.Context` via `zerolog.Ctx(ctx)`; configuring belongs
+  to the top-level program. `pre-commit` enforces the rules:
+  `zerolog-ban-msgf` and `zerolog-use-stringer` (beeper/pre-commit-go).
 - Structured logging: no `Msgf` for values — use typed fields; log keys
   `snake_case`; always attach the error with `.Err(err)` where relevant.
 - Every `if err != nil` either logs or returns to a caller that logs.
@@ -56,3 +59,8 @@ and [CodeReviewComments](https://go.dev/wiki/CodeReviewComments).
 - Constant SQL strings over sprintf'd queries; `NOT NULL` fields by default;
   `QueryRow` for single rows; bubble errors up (only `sql.ErrNoRows` may
   become a nil value with callers handling nil).
+
+## Servers (if/when needed)
+
+- Any server binary in this repo uses
+  [libserv](https://github.com/beeper/libserv) (Beeper's server library).
