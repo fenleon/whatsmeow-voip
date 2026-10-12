@@ -1,7 +1,12 @@
 # WhatsApp 1:1 Call Protocol Specification
 
 **Status:** draft — reverse-engineered, unofficial. **Date:** 2026-10-12.
-**Primary source:** [whatsapp-rust](https://github.com/oxidezap/whatsapp-rust) v0.7 `voip` (MIT) and its `wacore` crates, cross-validated on device against official WhatsApp clients (Light Phone III tool, 2026-09/10). Identifiers are quoted verbatim from source. Provenance tags: **[S]** = derived from source code, **[V]** = validated live against official clients.
+**Primary source:** [whatsapp-rust](https://github.com/oxidezap/whatsapp-rust) — facts extracted from the
+v0.7.0 tree and **amended to upstream `main` @ `0dc38af0` (PR #1712, 2026-10)**: 415 commits reviewed,
+11 wire-visible changes to 1:1 calls incorporated below and marked **[A]**. Cross-validated on device
+against official WhatsApp clients (Light Phone III tool, 2026-09/10). Identifiers are quoted verbatim
+from source. Provenance tags: **[S]** = source code, **[V]** = validated live, **[A]** = amended from
+upstream after v0.7.0.
 
 > **Disclaimer.** This documents an undocumented, proprietary protocol for
 > interoperability research. Unofficial clients violate WhatsApp's Terms of
@@ -80,10 +85,10 @@ Wrapper:
   wrongly ordered offer (nack 439).
 - Wrapper `id` is mandatory on `offer` and `accept`; an idless accept is
   silently dropped by the server.
-
-Action tags: `offer`, `offer_notice`, `preaccept`, `accept`, `reject`,
-`terminate`, `transport`, `relaylatency`, `video`, `group_update`,
-`enc_rekey`, `waiting_room_update`, `user_action`, `screen_share`.
+- **[A]** Control actions (mute) also require the wrapper `id`: the mute
+  action carries `mute-state="1"/"0"` and targets the peer JID (1:1) /
+  `{call_id}@call` (group). Idless control stanzas do not reach the peer
+  (PR #1351).
 
 ## 3. Call lifecycle
 
@@ -100,6 +105,9 @@ Action tags: `offer`, `offer_notice`, `preaccept`, `accept`, `reject`,
 | keepalive | both | `<heartbeat call-id call-creator/>` to `{call_id}@call` | 1 s cadence during active call |
 | hang up | either | `<terminate reason=…>` | see below |
 | decline | callee | `<reject call-id call-creator count="0">` | `reason="busy"` = that device can't take it; peer keeps ringing. No `reason` = explicit decline |
+
+**[A]** `reason="enc"` (received reject) is treated per-device like `busy` —
+siblings keep ringing (PR #1494).
 
 **Terminate reasons:** `accepted_elsewhere`, `rejected_elsewhere`, `timeout`,
 `group_call_ended`, or absent. Receive mapping: `timeout` / `group_call_ended`
@@ -122,8 +130,7 @@ of all media keying (§9) and is opaque to the server.
 1. `<privacy>` — the caller's tc token bytes
 2. `<audio enc="opus" rate="8000|16000">` — signaling rates from
    `DEFAULT_AUDIO_RATES = ["8000", "16000"]`
-3. optional `<video enc="h264" dec="h264" orientation="0"
-   screen_width="1920" screen_height="1080" device_orientation="0">`
+3. optional `<video …>` — see below
 4. `<net medium="3">`
 5. `<capability ver="1">` — 7-byte capability blob (below)
 6. callKey `<enc>` (bare = single device) or
@@ -131,25 +138,48 @@ of all media keying (§9) and is opaque to the server.
 7. `<encopt keygen="2">`
 8. `<device-identity>` — the caller's Signal identity blob
 
+**[A] Video node grammar (PR #1355, #1476).** The 1:1 offer `<video>` child
+follows WA Web's `fill_video` grammar:
+
+```xml
+<video enc="h.264" dec="H264" screen_width="0" screen_height="0"
+       device_orientation="0..3"/>
+```
+
+- `enc` is the **dotted** spelling `h.264` — the dotless `enc="h264"` is
+  silently discarded by peers: the offer is acked but **never rings**. [V]
+- `dec` is uppercase `H264`; the `orientation` attribute is not part of the
+  grammar — rotation rides `device_orientation` (0..=3 quarter turns).
+- `screen_width`/`screen_height` are `"0"` for 1:1 offers (the 1920×1080
+  shape is group-only). On `<accept>`: `dec="H264" device_orientation=…`.
+
 **Capability blobs** (7 bytes; they gate codec selection — there is no SDP
 anywhere in the protocol):
 
 | blob | meaning |
 |---|---|
 | `01 05 f7 09 e0 bb 13` | audio offer, MLow |
-| `01 05 f7 09 e0 fa 13` | video offer (`0xfa` at byte 5 = video) |
+| `01 05 f7 09 e0 bb 53` | video offer **[A]** (PR #1483) |
 | preaccept audio variant ends `0x07` | |
 | `…bb` → `…7f` variants | standard Opus instead of MLow (clearing bit 0x80 of byte 5 = capability bit 31) |
 
-The peer's blob byte 5 high bit selects `use_mlow_codec_v1` vs standard Opus.
+**[A]** (PR #1483) the `…e0 fa 13` video blob seen in v0.7.0 belongs to
+another platform's shape; all 1:1 offers use the `0xbb` family. **[A]** (PR
+#1111) the blob parses as `[version][len][mask]`; the codec gate is
+capability **index 31** (`capability[5] & 0x80`); an unparseable or
+`[0,5,…]`-shaped blob resets all peer capabilities — the historical
+"MLow sent to a native-Opus peer → silence" failure. Standard-Opus variants
+(`CAPABILITY_STANDARD_OPUS_*`) are the same blobs with bit 31 cleared.
 `<accept>` additionally carries `voip_settings` (advertises
 `rtcp_interval_ms=1500`; `standard_opus_voip_settings` for a 48 kHz Opus
 clock) and `audio_rates`. No SDP is exchanged at any point; SDP-like
 `ice-ufrag`/`ice-pwd` are synthesized locally from relay material (§5).
 
 **Fingerprinting note [V]:** offers carrying a captured-WA-Web-shaped
-`caller_pn` are silently dropped by the server (no ack) — the fork sends
-`caller_pn: None`. Client fingerprinting gates some signaling shapes.
+`caller_pn` are silently dropped by the server (no ack) — the reference
+client sends `caller_pn: None`. **[A]** (PR #1542) `caller_pn` *from incoming
+offers* is learned into the LID↔PN cache under username-privacy gates and
+used to migrate PN-keyed Signal sessions before dispatch.
 
 ## 5. Relay & media transport
 
@@ -160,7 +190,7 @@ the incoming `<call>` subtree (callee) or in the caller's `<ack type=offer>`:
   key for allocation
 - `<hbh_key>` — 30 bytes = 14 B salt seed + 16 B key seed, for hop-by-hop SRTP
   (§9.3); the accept ack can carry a `<relay>` patch merging it
-- `<warp_mi_tag_len>` — default 4 (§9.2)
+- `<warp_mi_tag_len>` — default 4, legal range 1..=20 **[A]** (PR #1348)
 - `<token id=N>` / `<auth_token id=N>` — indexed relay/auth token arrays
   (index cap 64)
 - `<te2>` — relay endpoints; content = raw address bytes (6 B = IPv4+port
@@ -200,14 +230,32 @@ bandwidth allocation is used.**
 | payload type | 120 (`WHATSAPP_PAYLOAD_TYPE_MLOW`) |
 
 `AudioSource` carries **raw PCM: 960-sample mono i16 @ 16 kHz** — buffers of
-any other length are dropped, no RTP is sent. Muted mic sends the one-byte DTX
-token `0x90`. Other negotiated audio formats exist: standard Opus
-(RFC 7587 PT 111, 48 kHz clock, ts step 2880), Opus-in-MLow-profile
-(PT 120, 16 kHz clock), and the MLow *escape* (§7.3). Sequencer: audio `seq`
-starts at 1, timestamp at 0, advancing 960/frame; the first speech frame after
-DTX/priming latches the RTP **marker** (MLow profile). RTP header sizes:
-audio speech 16 B, DTX 20 B, video 28 B; extension profile `0xdebe`; DTX
-packets carry extension word `0x30010000` (the WARP piggyback, §9.2).
+any other length are dropped, no RTP is sent. Other negotiated audio formats:
+standard Opus (RFC 7587 PT 111, 48 kHz clock, ts step 2880),
+Opus-in-MLow-profile (PT 120, 16 kHz clock), and the MLow *escape* (§7.3).
+Sequencer: audio `seq` starts at 1, timestamp at 0, advancing 960/frame; the
+first speech frame after DTX/priming latches the RTP **marker** (MLow
+profile). RTP header sizes: audio speech 16 B, DTX 20 B, video 28 B;
+extension profile `0xdebe`; DTX packets carry extension word `0x30010000`
+(the WARP piggyback, §9.2).
+
+**[A] Codec selection is negotiation-driven** (PR #1111): the inbound decoder
+is picked from the peer capability blob plus a content probe — never assumed
+MLow. A mid-call codec switch is allowed only between **timing-identical
+siblings** (same payload type, clock, timestamp step, sample rate, channels,
+samples/frame, signaling rate) and needs no re-signaling.
+
+**[A] Multiframe envelope (receive).** Real clients may pack up to 18 audio
+frames into one RTP payload: indicator byte where `(b & 0xC0) != 0xC0` and
+`(b & 0x82) == 0x82` (a shape unreachable as a real TOC — reads like
+"SID+FEC"), followed by frame count (mask `0x3f`), a padding flag `0x40`, and
+chained frames. A 120 ms send is two 60 ms blocks in this envelope. A naive
+decoder that reads bit 7 as SID here emits comfort noise for the whole call.
+
+**[A] Mute framing (PR #1616 context).** v0.7.0 sent the one-byte SID token
+`0x90` on mute; current main's encoder instead emits activity-dependent
+inactive frames (§7.1) — the SID bit is not used in either direction's
+normal emission.
 
 ## 7. The MLow codec
 
@@ -218,30 +266,38 @@ split-band CELP codec**, the default for WhatsApp 1:1 calls. Decoder guard:
 exactly 16 kHz wideband, `low_rate=0`, 60 ms — frames at other internal rates
 are dropped (never mis-decoded; a range-coder desync would otherwise corrupt
 the stream). One MLow frame = 3 chained 20 ms internal frames = 960 samples.
-Encoder emits active `config=0` (`0x50`) frames; each internal frame is either
-voiced (LTP pitch block) or unvoiced (gains block), never both.
+
+**[A] TOC emission is activity-dependent** (PRs #1616/#1620; v0.7.0 emitted
+constant `0x50`): active speech `0x50` (VAD bit set), DTX-hangover packet
+`0x12` (body still coded *active*, VAD bit clear), settled noise floor `0x10`
+(coded *inactive*). **The SID bit (bit 7) is never set** — DTX is off; every
+frame carries a full decodable body. Inactive bodies use `p4 = 0`
+(BACKGROUND_NOISE pulse geometry, 80 vs 160 pulse capacity) and **omit the
+LSF voicing selector plus the interpolation-index/extra symbols** (two
+symbols fewer; emitting them desyncs the range coder).
 
 ### 7.2 Packet format
 
 **[S]** Payload = **TOC byte + range-coded body**:
 
-- TOC bit 7 = SID (DTX/CNG), bit 6 = VAD, bit 5 = internal rate (0 → 16k,
-  1 → 32k), bits 4:3 = frame size index into {10, 20, 60, 120} ms.
+- TOC bit 7 = SID (never set in current emission), bit 6 = VAD, bit 5 =
+  internal rate (0 → 16k, 1 → 32k), bits 4:3 = frame size index into
+  {10, 20, 60, 120} ms, bit 2 = low_rate, bit 1 = FEC, bit 0 = stereo. **[A]**
 - Speech frames: 20 ms TOC `0x48..0x4f`, 60 ms `0x50..0x57` (≥18 B payload).
-- DTX/SID: `(b & 0xC0) == 0x80`; canonical SID token `0x90`.
 - `(b & 0xC0) == 0xC0` → in-profile **standard Opus/CELT escape** (§7.3).
 - Symbol order per internal frame: LSF → pulses → pitch (voiced) / gains
   (unvoiced). Optional **SplitRed** redundancy wrapper exists (PT 121) when
   `mlow_red_redundancy_level > 0`: `[red_hdr[i] 2B each][main_marker 1B]
   [red payloads][main payload]`.
+- **[A]** Multi-frame payloads use the envelope of §6, not chained TOCs.
 
 ### 7.3 The Opus escape
 
 **[S]** CELT-only Opus packets ride inside the MLow RTP profile transcode-free
 via a **TOC rewrite**: stock TOC `0xC0|config…` forms are rewritten to the
 MLow TOC grammar (code-1/code-2 shorthand gets an explicit descriptor byte);
-libopus DTX (≤2 B packets) and CELT hangover silence map to SID `0x90`. The
-inverse restores the RFC TOC. Encoder settings for the escape: libopus
+libopus DTX (≤2 B packets) and CELT hangover silence map to a silence token.
+The inverse restores the RFC TOC. Encoder settings for the escape: libopus
 `Application::LowDelay`, wideband max (CELT-only), 24 kbps, complexity 5,
 DTX on. Stock Opus *mis-decodes* raw MLow — both directions of the escape
 exist precisely because of that.
@@ -268,19 +324,34 @@ fixed `@pj…org` host. Reception reports extend the RFC 3550 24-byte block with
 **24 extra bytes** of transport/bandwidth stats, signaled by bit 4 of the
 count nibble.
 
-Keyframe feedback: peer requests are PSFB **PLI (FMT 1)** matching the video
-SSRC, or **FIR (FMT 4)** (target in the media field or 8-byte FCI rows).
+Keyframe feedback — receive path parses PSFB **PLI (FMT 1)** matching the
+video SSRC, or **FIR (FMT 4)** (target in the media field or 8-byte FCI
+rows). **[A] Outbound PLI** (PR #1385): clients *do* originate PLI — PSFB
+FMT 1, 12 bytes, no FCI, byte0 `0x81`, or **`0x91` on the WhatsApp video
+profile** (bit 4 of byte 0 is required; a byte0 of `0x81` is discarded by
+peer transports that match `PT==206 && byte0 & 0x1F == 0x11`). Sender SSRC =
+our RTP SSRC, media SSRC = the peer's depacketizer SSRC, SRTCP-protected.
+The deliberately **sequence-less** form is load-bearing: WhatsApp's 16-byte
+PLI carries a sequence number that peer dedup drops against fresh state
+(`seq > 400`), while the short form is always honored.
+
 Video RTP: clock 90 000, timestamp stride `90_000/fps` (6000 @ 15 fps, 4500
-@ 20 fps); all packets of one access unit share a timestamp, which advances
-only when the AU closes (marker). Video header extension block (12 B,
-profile `0xdebe`): ID 3 `media_frame_info` (1 B; IDR = `0x09`, delta = `0x01`,
-identical across fragments of an AU), ID 5 `initial_bandwidth` (2 B),
-ID 6 `short_offset` (2 B), ID 9 `transport_sequence` (2 B).
+@ 20 fps); **[A]** timestamps may alternatively come from the source capture
+clock (PR #1437). All packets of one access unit share a timestamp, which
+advances only when the AU closes (marker). Video header extension block
+(12 B, profile `0xdebe`): ID 3 `media_frame_info` (1 B), ID 5
+`initial_bandwidth` (2 B), ID 6 `short_offset` (2 B), ID 9
+`transport_sequence` (2 B). **[A]** `media_frame_info` semantics (PR #1463):
+**bit 3 = keyframe (`0x08`), low 2 bits = rotation in quarter turns;
+delta = `0x00`** — identical across all fragments of an AU. (The v0.7.0
+`0x09`/`0x01` reading misread a WASM-internal presence flag as a wire bit.)
 
 ## 9. Media cryptography
 
 All media crypto derives from the per-call **callKey** (32 B, §3) — the
-server never sees it.
+server never sees it. **[A]** No key-schedule changes upstream through
+`0dc38af0` (PR #1348 verified the SRTP/WARP/H.264 rewrite byte-identical
+against golden tests); the WARP MI tag length is documented as 1..=20.
 
 ### 9.1 E2E SRTP (primary path)
 
@@ -299,10 +370,10 @@ index committed only after the MI tag verifies).
 
 ### 9.2 WARP MESSAGE-INTEGRITY tag
 
-**[S]** Each packet carries a 4-byte tag (`warp_mi_tag_len`): first 4 bytes of
-`HMAC-SHA1(auth_key, packet || roc_be32)`, keyed by the per-participant SRTP
-auth key. On DTX/priming packets the tag piggybacks inside the RTP extension
-word `0x30010000`, sent from packet #3 onward.
+**[S]** Each packet carries a 4-byte tag (`warp_mi_tag_len`, 1..=20): first
+`tag_len` bytes of `HMAC-SHA1(auth_key, packet || roc_be32)`, keyed by the
+per-participant SRTP auth key. On DTX/priming packets the tag piggybacks
+inside the RTP extension word `0x30010000`, sent from packet #3 onward.
 
 ### 9.3 Hop-by-hop SRTP (client ↔ relay)
 
@@ -344,13 +415,19 @@ calls use per-epoch group keys instead.
 | 11 | **UpgradeRequestV2** (current; sends `voip_settings="video"`) |
 | 20 | error |
 
-Current flow: initiator sends `state=11 dec="H264"`, arms a 5 s timeout that
-sends `state=9` on expiry; acceptor replies `state=4 dec="H264,AV1"` then
-`state=1 dec="H264"`. Camera off = `state=6`; camera back on = standalone
+Current flow: initiator sends `state=11 dec="H264"`, arms a **5 s**
+(`VIDEO_UPGRADE_TIMEOUT`) timer. **[A]** (PR #1498) the timeout is
+**direction-local**: on expiry the initiator sends `state=6` (Stopped) for
+*its own direction only* — the whole request is no longer torn down both
+ways. An upgrade request is refused outright (not sent) when the peer's
+direction is already video-active. Acceptor replies `state=4 dec="H264,AV1"`
+then `state=1 dec="H264"`. **[A]** `resume_video` re-enables a stopped
+direction **ungated**: a bare `state=1` with no handshake, no timeout, no
+marker. Camera off = `state=6`; camera back on = standalone
 `state=1 dec="H264" device_orientation=N`. `dec` lists codecs the *sender*
 can decode. A declined upgrade is, in practice, mapped by clients to
-`state=6` (the explicit `state=5` path is unreferenced in the Rust client).
-Offers/accepts carry `<video enc="h264" dec="h264" …>` (§4).
+`state=6` (the explicit `state=5` path is unreferenced). Offers/accepts
+carry `<video>` per §4's grammar.
 
 ### 10.2 Media
 
@@ -360,14 +437,21 @@ L3.1, no B-frames, one slice/frame; tiers 640×480@15fps ~600 kbps (default)
 and 1280×720@20fps ~1.8 Mbps (WiFi). Packetization (RFC 6184): single-NAL
 (≤800 B) or FU-A (798 B fragments); inbound single-NAL / STAP-A / FU-A; an AU
 completes on marker or timestamp change (4 MiB reassembly cap). **AUD NALs
-are omitted** because WhatsApp's decoder requires SPS/PPS to lead every IDR —
-senders prepend CSD to each IDR, which the receiver packs into one STAP-A.
-Decoder: hold AUs until the first keyframe; after relay reconnect, delta AUs
-are dropped until a fresh keyframe. Orientation is the signaling
-`device_orientation` value **masked `& 0x03`** (official clients send
-unmasked values, e.g. wire 4 = 270°), applied as `rotationZ = 90° × value`.
-Peer PLI/FIR → keyframe request surfaces on the sender's video-control
-channel; local outbound overflow requests an IDR from the local encoder.
+are omitted** because WhatsApp's decoder requires SPS/PPS to lead every IDR.
+**[A] CSD aggregation (PR #1496):** v0.7.0 sent SPS and PPS as separate
+single-NAL packets; current clients pack consecutive small **non-VCL** NALs
+into one STAP-A (indicator `0x78` for NRI-3 SPS+PPS, backpatched with
+F = OR / NRI = max, 2-byte BE length per member, total ≤ single-NAL max;
+overflow opens a new STAP-A; **slices are never aggregated**). An IDR on the
+wire is therefore STAP-A(SPS,PPS) followed by slice packets, PT 97. Decoder:
+hold AUs until the first keyframe; after relay reconnect, delta AUs are
+dropped until a fresh keyframe; received `reason="enc"` rejects are
+per-device. Orientation is the `device_orientation` value (0..=3 quarter
+turns, from offer/accept §4 and mid-call video stanzas) **masked `& 0x03`**
+(official clients send unmasked values, e.g. wire 4 = 270°), applied as
+`rotationZ = 90° × value`. Peer PLI/FIR → keyframe request surfaces on the
+sender's video-control channel; local outbound overflow requests an IDR from
+the local encoder.
 
 ## 11. Call log sync
 
@@ -398,31 +482,41 @@ Status: **planned** for this repo. The Rust reference currently pins:
 - Round-trip checksums: decode FNV-1a `0x8782cb8cd7b5f262`, bitstream
   `0xb1793f1072d15a7d`
 
-Export format and language-neutral packaging TBD (first consumer: a Go port
-for whatsmeow).
+Export format and language-neutral packaging TBD — target convention:
+whatspec-style versioned JSON + JSON Schema + manifest with WhatsApp-version
+stamps and content hashes (§14).
 
 ## 13. Open questions
 
-- Official callee-side accept timeout (not in source; observed behavior TBD).
+- Official callee-side accept timeout (no change found across the 415
+  reviewed commits; still open).
 - `offer_notice` server fan-out policy beyond its attributes.
-- Whether official clients ever originate PLI/FIR (the Rust client only
-  parses them) and any direct-P2P ICE path (attribute exists, unused).
+- Any direct-P2P ICE path (attribute exists, unused by the reference client).
 - Exact semantics/timing of `enc_rekey` and `user_action`.
-- Group-call media (SFrame epoch keying, waiting rooms) — out of scope for
-  this spec's first revision.
+- Group-call media (SFrame epoch keying, waiting rooms, relay
+  admission/transaction-id refresh PR #1621) — out of scope for this
+  revision; documented separately when tackled.
+
+~~Answered by this review:~~ PLI origination (§8 — clients do send it,
+sequence-less form), MLow DTX/SID behavior (§7.1 — SID never set,
+activity-dependent TOC), >60 ms RTP payloads (§6 — multiframe envelope).
 
 ## 14. Sources
 
-- [whatsapp-rust](https://github.com/oxidezap/whatsapp-rust) v0.7 + `wacore`
-  (MIT) — primary; identifiers quoted verbatim. Key files:
+- [whatsapp-rust](https://github.com/oxidezap/whatsapp-rust) — primary;
+  identifiers quoted verbatim. Facts extracted at v0.7.0 (`f8165f28`) and
+  amended through `main` @ `0dc38af0` (415 commits reviewed; wire-visible
+  1:1 deltas: PRs #1111, #1351, #1355, #1385, #1437, #1463, #1476, #1483,
+  #1494, #1496, #1498, #1542, #1616). Key files (current paths):
   `wacore/src/stanza/call.rs`, `wacore/src/types/call.rs`,
-  `wacore/src/voip/*` (relay_parse, rtp, rtcp, e2e_srtp, hbh_srtp, sframe,
-  warp, stun, engine, h264, mlow/), `src/voip/facade.rs`,
-  `src/voip/transport.rs`, `src/handlers/call.rs`, `src/features/call_log.rs`,
-  `waproto/src/whatsapp.proto`.
+  `wacore/src/voip/*` (rtp, rtcp, e2e_srtp, hbh_srtp, sframe, warp, stun,
+  engine, h264, mlow/), `wacore/src/voip_control/relay_parse.rs` (moved from
+  `wacore/src/voip/` by PR #1509 — constants unchanged),
+  `src/voip/facade.rs`, `src/voip/transport.rs`, `src/handlers/call.rs`,
+  `src/features/call_log.rs`, `waproto/src/whatsapp.proto`.
 - On-device validation against official clients (2026-09/10): capability
   gating / `caller_pn` fingerprinting, CSD-per-IDR, orientation masking,
-  relay port 3480 requirement, video tiers.
+  relay port 3480 requirement, video tiers, dotted `enc="h.264"` necessity.
 - [whatspec](https://github.com/oxidezap/whatspec) — the ecosystem's
   language-neutral protocol IR (extracted from the WA Web bundle; supplies
   the `waproto` definitions). **whatspec covers iq/proto/appstate/enums/
@@ -430,4 +524,4 @@ for whatsmeow).
   missing surface; its vectors aim to follow whatspec's packaging
   conventions (versioned JSON + schema + manifest with provenance).
 - Sibling work: [open-madrid](https://github.com/fenleon/open-madrid) (the
-  iMessage equivalent) — same methodology: public spec + vectors, MIT.
+  iMessage equivalent) — same methodology: public spec + vectors.
