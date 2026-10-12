@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "whatsmeow-voip vector manifest",
+  "type": "object",
+  "required": ["schemaVersion", "description", "source", "files"],
+  "properties": {
+    "schemaVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "description": { "type": "string" },
+    "source": {
+      "type": "object",
+      "required": ["repository", "license", "extractionDate"],
+      "properties": {
+        "repository": { "type": "string", "format": "uri" },
+        "license": { "type": "string" },
+        "baselineCommit": { "type": "string" },
+        "amendedThroughCommit": { "type": "string" },
+        "extractionDate": { "type": "string", "format": "date" },
+        "note": { "type": "string" }
+      }
+    },
+    "checksums": {
+      "type": "object",
+      "properties": {
+        "goldenDecodeFnv1a": { "type": "string" },
+        "goldenBitstreamFnv1a": { "type": "string" }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "domain", "role", "bytes", "sha256"],
+        "properties": {
+          "path": { "type": "string" },
+          "domain": { "enum": ["media-crypto", "mlow", "mlow-tables", "meta"] },
+          "role": { "type": "string" },
+          "bytes": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,207 @@
+{
+  "schemaVersion": "1.0.0",
+  "description": "WhatsApp 1:1 call test vectors: MLow codec, media crypto (SRTP/HBH/SFrame), RTP/RTCP framing. Exported verbatim from the MIT Rust reference implementation.",
+  "source": {
+    "repository": "https://github.com/oxidezap/whatsapp-rust",
+    "license": "MIT",
+    "baselineCommit": "f8165f28 (v0.7.0)",
+    "amendedThroughCommit": "0dc38af0 (main, PR #1712, 2026-10)",
+    "extractionDate": "2026-10-12",
+    "note": "Fixtures are synthetic; no production captures (see vectors/mlow/PROVENANCE.md). Regen recipes in vectors/README.md."
+  },
+  "checksums": {
+    "goldenDecodeFnv1a": "0x8782cb8cd7b5f262",
+    "goldenBitstreamFnv1a": "0xb1793f1072d15a7d"
+  },
+  "files": [
+    {
+      "path": "mlow/PROVENANCE.md",
+      "domain": "meta",
+      "role": "Per-fixture provenance + regeneration recipes from the Rust reference",
+      "bytes": 5537,
+      "sha256": "476b37eade7302465ffbb8cb5528bf667f9fed161f2a8869de2edd2de92076f2"
+    },
+    {
+      "path": "mlow/README.md",
+      "domain": "meta",
+      "role": "Runtime tables doc: what the seed .bin blobs are, regen recipe",
+      "bytes": 1951,
+      "sha256": "6261e485e5a25914f97b8e10e447bbc6531fa2dc7644bb9feee7838d0cb7a27e"
+    },
+    {
+      "path": "mlow/cc_seed.bin",
+      "domain": "mlow-tables",
+      "role": "Runtime constant table (zlib+protobuf): nrgres/gains + LTP gain + pulse CDFs",
+      "bytes": 2150,
+      "sha256": "55042f010f5b6efd19d18c2a4999c8d76a38486f7698fcd81f83bf04cce2087e"
+    },
+    {
+      "path": "mlow/e2e_vectors.json",
+      "domain": "mlow",
+      "role": "Per-frame mlow payload + libopus useSmpl reference PCM",
+      "bytes": 1814886,
+      "sha256": "7caafd5f583eea82d0669d95daa7058ec7bd1913e19cbfd6b21aff4870fff720"
+    },
+    {
+      "path": "mlow/exc_pre_lags.json",
+      "domain": "mlow",
+      "role": "Decoder stage: C pre-noise excitation dump",
+      "bytes": 2187675,
+      "sha256": "c7a15fb1fd975efe5344bf78f6793c7e1682163c8e1de5bfe68323c9c83a6d34"
+    },
+    {
+      "path": "mlow/fe_dump.json",
+      "domain": "mlow",
+      "role": "Encoder front-end vs C reference (smpl_lpc)",
+      "bytes": 532468,
+      "sha256": "cd29d7eacdb2137dd1ee61bcf5c19e3d3f9afcc00d749d517c0636b4b349eb68"
+    },
+    {
+      "path": "mlow/gains_vectors.json",
+      "domain": "mlow",
+      "role": "Decoder cross-check: gains",
+      "bytes": 38140,
+      "sha256": "2d4c59708901368ece9ff51c275d2a8087917af3724b697e14bd4cb5a3046a9e"
+    },
+    {
+      "path": "mlow/gennoise_params_dump.json",
+      "domain": "mlow",
+      "role": "Decode-param dump (nrgres FCBG vs C)",
+      "bytes": 239236,
+      "sha256": "8acafb36a68b0dbe4b5d875fc1020bfe2bd0570b350c699d754d0d125a96088c"
+    },
+    {
+      "path": "mlow/gennoise_vectors.json",
+      "domain": "mlow",
+      "role": "Decoder stage: comfort-noise generator vs C",
+      "bytes": 5798226,
+      "sha256": "c6b3dce99fded475cb4e32eb412657532f178753a6f6b6645ebec65064fc4137"
+    },
+    {
+      "path": "mlow/harm_postfilter_vectors.raw",
+      "domain": "mlow",
+      "role": "Decoder stage: harmonic postfilter vs C",
+      "bytes": 857124,
+      "sha256": "a9772891741f4691841022a9f41c49bf6bca8142e16dda7ca95afaa3485b8db6"
+    },
+    {
+      "path": "mlow/hp_postfilter_vectors.raw",
+      "domain": "mlow",
+      "role": "Decoder stage: high-pass postfilter vs C",
+      "bytes": 1297564,
+      "sha256": "69710c7ad3966d9caa99588e29cdc7057469b5764f51934540191b477a5cb94a"
+    },
+    {
+      "path": "mlow/inbound_capture_frames.json",
+      "domain": "mlow",
+      "role": "External smpl-encoder wire frames of synth_mic.raw (hex), TOC 0x10/0x12/0x50",
+      "bytes": 31663,
+      "sha256": "ce79072be859d3c1e8957e3b8682009e881303ead70c41d1833552afc1c07784"
+    },
+    {
+      "path": "mlow/lsf_quant_io.json",
+      "domain": "mlow",
+      "role": "Encoder LSF quantization vs C reference",
+      "bytes": 66219,
+      "sha256": "000444a4587ab61106ac48356ebed352119eb114c6b7f8501efed86cd9747abc"
+    },
+    {
+      "path": "mlow/lsf_seed.bin",
+      "domain": "mlow-tables",
+      "role": "Runtime constant table: synth/lsf-decode/lsf-cb tables",
+      "bytes": 30359,
+      "sha256": "2955655361ca4201110e74e40bec00481ac5b0c2aa636379cc08a0704965fd9e"
+    },
+    {
+      "path": "mlow/lsf_vectors.json",
+      "domain": "mlow",
+      "role": "Decoder cross-check: LSF",
+      "bytes": 38789,
+      "sha256": "30834ff8f6880b98d6994f2f3324692af8d92f7ae4e714868802de6f74324c36"
+    },
+    {
+      "path": "mlow/pitch_seed.bin",
+      "domain": "mlow-tables",
+      "role": "Runtime constant table: pitch tables",
+      "bytes": 2362,
+      "sha256": "86f38aee8daae23cd84606c63ce000f35073be811ae300544ef718a9ced52786"
+    },
+    {
+      "path": "mlow/pitch_vectors.json",
+      "domain": "mlow",
+      "role": "Decoder cross-check: pitch",
+      "bytes": 41332,
+      "sha256": "d87b9696642e60cc00839a40ae1d83967ee6a42711d8756e973752f3b021926e"
+    },
+    {
+      "path": "mlow/pitchio_ground_truth.json",
+      "domain": "mlow",
+      "role": "Encoder pitch estimator vs C ground truth",
+      "bytes": 1474471,
+      "sha256": "b59956190370961c92a47929ce72a430f5f95a65a79c56e975787f2d375b4c61"
+    },
+    {
+      "path": "mlow/pulse_vectors.json",
+      "domain": "mlow",
+      "role": "Decoder cross-check: excitation pulses",
+      "bytes": 175768,
+      "sha256": "7208571168f158fd4d6f67d7380c26d8241e3dcfe8039b83fc058d347528e099"
+    },
+    {
+      "path": "mlow/rc_vectors.json",
+      "domain": "mlow",
+      "role": "Decoder cross-check: range coder",
+      "bytes": 192563,
+      "sha256": "39ac63e421a1759891bcd24eec1374dc158a7db860cd15e8ab84e540efae29fd"
+    },
+    {
+      "path": "mlow/ref_usesmpl_expected.raw",
+      "domain": "mlow",
+      "role": "Reference decode PCM: libopus built with useSmpl over the encoded frames of synth_mic.raw",
+      "bytes": 211200,
+      "sha256": "144ca828a9106b59528fb83cc729f79f4a203a22f2d2b35e6dd93ce6b8f020cb"
+    },
+    {
+      "path": "mlow/sigmode_ground_truth.json",
+      "domain": "mlow",
+      "role": "Encoder signal-mode decision vs C ground truth",
+      "bytes": 241624,
+      "sha256": "ed7c3408a9dd3ce8615502bb64a358d3448bff78bc7bf1175609e91afc9d0d49"
+    },
+    {
+      "path": "mlow/synth_mic.raw",
+      "domain": "mlow",
+      "role": "Root synthetic input: s16le/16kHz/mono/110x960 frames; fully synthetic, deterministic",
+      "bytes": 211200,
+      "sha256": "aec92c54ecc1e1f81dc20c5a730499af5f4efbd4ed90fea3ffab26e606f8f569"
+    },
+    {
+      "path": "mlow/toc_vectors.json",
+      "domain": "mlow",
+      "role": "Full 256-byte TOC decode table, input-independent",
+      "bytes": 40580,
+      "sha256": "d90b1525e5cea736b28cbf6b593ab7c9f29ded7bb752c04d34b14232a71588cb"
+    },
+    {
+      "path": "mlow/vad_ground_truth.json",
+      "domain": "mlow",
+      "role": "Encoder VAD vs C ground truth (bit-exact prefix)",
+      "bytes": 11483,
+      "sha256": "c6bd035f0775f704f1befa2a1bef213820155fc9a9df7686c96e8730d781123a"
+    },
+    {
+      "path": "voip/kats.json",
+      "domain": "media-crypto",
+      "role": "Known-answer tests: E2E SRTP (AES-CM KDF, AES-128-CTR IV, WARP MI tag), HBH SRTP two-stage HKDF + ICM, SFrame (GCM nonce/header), wahkdf, RTP header shapes, RTCP compact 208/209 + SR, STUN allocate/ping, stun_proto subscriptions/descriptors",
+      "bytes": 5097,
+      "sha256": "86f9bd9d7494b1f50f218c4565a1233b22dff9154ae15936888e390593ac4c98"
+    },
+    {
+      "path": "voip/stun_proto.md",
+      "domain": "media-crypto",
+      "role": "Field notes for the stun_proto protobuf fragment vectors in kats.json",
+      "bytes": 3617,
+      "sha256": "80d9273cc7c005d7c8e003f278db88443465cbc383f2eb8493d9f246e2690392"
+    }
+  ]
+}
