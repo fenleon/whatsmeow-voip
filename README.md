@@ -16,8 +16,17 @@ changes that, in stages, with the goal of landing the work upstream:
    verified byte-exact. *Status: planned.*
 3. **Go implementation** — `whatsmeow-voip`: call signaling, then media
    (Pion for DTLS/SCTP/SRTP transport, MLow codec ported against the vectors).
-   *Status: not started.* Contribution target: whatsmeow (signaling/media
-   hooks) and mautrix-whatsapp (client surface).
+   **Started:** the media-crypto stack (`wavoip` package — E2E SRTP, WARP MI
+   tag, HBH SRTP, SFrame, SSRC derivation) is implemented and verified
+   byte-exact against `vectors/voip/kats.json`:
+
+   ```sh
+   go run ./cmd/verify-kats   # verify-kats: all known-answer vectors pass
+   go test ./...
+   ```
+
+   Contribution target: whatsmeow (signaling/media hooks) and mautrix-whatsapp
+   (client surface).
 
 ## Upstream process
 
