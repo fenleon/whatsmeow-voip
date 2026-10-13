@@ -37,20 +37,23 @@ const smplFLen = smplLpcNfft/2 + 1
 
 var smplPiF64 = float64(smplPi)
 
-// genSinWin: win[i] = sinf((i+1)/(N+1) * PI/2).
+// genSinWin: win[i] = sinf((i+1)/(N+1) * PI/2). The reference computes the
+// window values with f32::sin (libm sinf); the float64-backed sin32 differs
+// from sinf on ~1% of inputs by 1 ulp, which propagates through the windowed
+// FFT chains and flips rare quantizer ties.
 func genSinWin(n int) []float32 {
 	w := make([]float32, n)
 	for i := 0; i < n; i++ {
-		w[i] = sin32((float32(i) + 1.0) / (float32(n) + 1.0) * smplPi / 2.0)
+		w[i] = f32Sin((float32(i) + 1.0) / (float32(n) + 1.0) * smplPi / 2.0)
 	}
 	return w
 }
 
-// genCosWin: win[i] = cosf((i+1)/(N+1) * PI/2).
+// genCosWin: win[i] = cosf((i+1)/(N+1) * PI/2). See genSinWin for the sinf note.
 func genCosWin(n int) []float32 {
 	w := make([]float32, n)
 	for i := 0; i < n; i++ {
-		w[i] = cos32((float32(i) + 1.0) / (float32(n) + 1.0) * smplPi / 2.0)
+		w[i] = f32Cos((float32(i) + 1.0) / (float32(n) + 1.0) * smplPi / 2.0)
 	}
 	return w
 }

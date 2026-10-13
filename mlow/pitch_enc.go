@@ -933,8 +933,6 @@ func getPrevLagBias(st *PitchEstState, lag float32) float32 {
 	return 0.0
 }
 
-func f32Sqrt(x float32) float32      { return float32(math.Sqrt(float64(x))) }
-func f32Ln(x float32) float32        { return float32(math.Log(float64(x))) }
 func f32RoundUp(x float32) float32   { return float32(math.Ceil(float64(x))) }
 func f32RoundDown(x float32) float32 { return float32(math.Floor(float64(x))) }
 func maxInt(a, b int) int {

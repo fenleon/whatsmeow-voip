@@ -6,8 +6,6 @@
 // this port. The shared spectral-harmonicity measure lives in pitch_enc.go.
 package mlow
 
-import "math"
-
 var smplVuvWeights = [5]float32{1.0, 0.5, 0.5, 0.7, 0.3}
 
 const (
@@ -22,8 +20,6 @@ const (
 func smplInvSigmoid(x float32) float32 {
 	return -f32Ln((1.0 / x) - 1.0)
 }
-
-func f32Exp(x float32) float32 { return float32(math.Exp(float64(x))) }
 
 // VuvMode is the per-stream voicing hysteresis + spectral-tilt background
 // tracker. The encoder threads one instance across the whole stream.
@@ -102,5 +98,3 @@ func clamp01(x float32) float32 {
 	}
 	return x
 }
-
-func f32Tanh(x float32) float32 { return float32(math.Tanh(float64(x))) }

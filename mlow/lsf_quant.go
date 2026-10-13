@@ -79,8 +79,8 @@ func getMaxiK(x []float32, idx []int32, k int) {
 func lsfWeightsSpectral(a *[lsfOrder + 1]float32, lsf *[lsfOrder]float32) [lsfOrder]float32 {
 	var lsfw [lsfOrder]float32
 	for i := 0; i < lsfQuantOrderConst; i++ {
-		eRe := cos32(lsf[i])
-		eIm := sin32(lsf[i])
+		eRe := f32Cos(lsf[i])
+		eIm := f32Sin(lsf[i])
 		var accRe, accIm float32 = 1.0, 0.0
 		epRe, epIm := eRe, eIm
 		for j := 1; j < lsfQuantOrderConst; j++ {
@@ -103,7 +103,7 @@ func lsfWeightsSpectral(a *[lsfOrder + 1]float32, lsf *[lsfOrder]float32) [lsfOr
 	}
 	scale := 1.0 / minLsfw
 	for i := range lsfw {
-		lsfw[i] = 1.0 / float32(math.Sqrt(float64(lsfw[i]*scale)))
+		lsfw[i] = 1.0 / f32Sqrt(lsfw[i]*scale)
 	}
 	return lsfw
 }
@@ -355,10 +355,6 @@ func f32Abs(x float32) float32 {
 		return -x
 	}
 	return x
-}
-
-func f32Log2(x float32) float32 {
-	return float32(math.Log2(float64(x)))
 }
 
 // LsfQuant is the non-conditional LSF quantization. a is the monic LPC

@@ -6,8 +6,6 @@
 // the C to a tight float tolerance, not bit-for-bit.
 package mlow
 
-import "math"
-
 type cpx struct{ re, im float32 }
 
 func cpxAdd(a, b cpx) cpx { return cpx{a.re + b.re, a.im + b.im} }
@@ -61,9 +59,6 @@ func baseTwiddle(n, k, j int, sign float32) cpx {
 	ang := angK * float32(j)
 	return cpx{cos32(ang), sin32(ang)}
 }
-
-func cos32(x float32) float32 { return float32(math.Cos(float64(x))) }
-func sin32(x float32) float32 { return float32(math.Sin(float64(x))) }
 
 // newFftTwiddles builds the twiddle tables for the chain of n values the
 // recursion visits from top down, for the given sign.

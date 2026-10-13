@@ -226,10 +226,6 @@ func smplFiltMA9(x []float32, xBase, n int, coef []float32, y []float32) {
 	}
 }
 
-func f32Log10(x float32) float32 {
-	return float32(math.Log10(float64(x)))
-}
-
 // smplCmfToBits is -log2(p) per symbol from a cumulative u16 CDF.
 func smplCmfToBits(cmf []uint16, bits []float32) {
 	for i := 0; i < len(cmf)-1; i++ {
@@ -478,6 +474,8 @@ func NewCelpEncoder(lowRate bool, percRespLen, fcbSubfrLen, subfrPerPacket int) 
 		sgntrs[i] = s
 	}
 
+	// The Rust computes this with f32 sinf at init; sin32 is the matching
+	// wrapper (f32libm.go).
 	hanningWin := make([]float32, percRespLen)
 	scale := 1.0 / float32(2*smplPercRespLen+1)
 	for i := 0; i < percRespLen; i++ {

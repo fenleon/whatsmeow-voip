@@ -19,8 +19,6 @@
 // reused.
 package mlow
 
-import "math"
-
 const (
 	percwNfft  = 512 + 64 // 576
 	percwFsKhz = 16.0
@@ -155,10 +153,6 @@ var smplRateControlModelComp5 = [4][2][8]float32{
 var smplRateControlThrsComp5 = [4][2]uint16{
 	{7500, 10000}, {4500, 5750}, {4000, 5000}, {4000, 4750},
 }
-
-// f32Pow is f32 powf, computed in double and rounded, matching the package's
-// other f32 libm wrappers (f32Sqrt, f32Ln, ...).
-func f32Pow(x, y float32) float32 { return float32(math.Pow(float64(x), float64(y))) }
 
 // percWindows holds the perc-relevant window tables, built once per state.
 type percWindows struct {
